@@ -1,103 +1,83 @@
-from dotenv import load_dotenv
-load_dotenv()
-
-import os
-import time
-from datetime import datetime, timezone
-from typing import List
-
 import pandas as pd
-import requests
+from datetime import timedelta
 
-from src.data.cache import load_cache, save_cache
-
-FINNHUB_BASE_URL = "https://finnhub.io/api/v1"
+import yfinance as yf
 
 
-def _to_unix(dt: datetime) -> int:
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return int(dt.timestamp())
+# yfinance a des limites sur l'intraday (15m/30m/1h)
+_MAX_DAYS_BY_INTERVAL = {
+    "15m": 59,     # ~60 jours max
+    "30m": 59,
+    "1h": 729,     # ~730 jours max
+    "1d": 5000,    # large
+}
+
+# mapping simple pour FX si tu veux "EUR/USD" dans l'UI
+_YF_SYMBOL_MAP = {
+    "EUR/USD": "EURUSD=X",
+    "GBP/USD": "GBPUSD=X",
+}
 
 
-def _resolution(interval: str) -> str:
-    mapping = {
-        "1m": "1",
-        "5m": "5",
-        "15m": "15",
-        "30m": "30",
-        "1h": "60",
-        "1d": "D",
-    }
-    interval = interval.lower()
-    if interval not in mapping:
-        raise ValueError("Interval non supporté (1m, 5m, 15m, 30m, 1h, 1d)")
-    return mapping[interval]
+def _clip_dates_for_interval(start: pd.Timestamp, end: pd.Timestamp, interval: str) -> tuple[pd.Timestamp, pd.Timestamp]:
+    max_days = _MAX_DAYS_BY_INTERVAL.get(interval, 365)
+    if (end - start).days > max_days:
+        start = end - timedelta(days=max_days)
+    return start, end
 
 
-def _get_api_key() -> str:
-    key = os.getenv("FINNHUB_API_KEY")
-    if not key:
-        raise RuntimeError("FINNHUB_API_KEY manquant dans .env")
-    return key
-
-
-def get_prices(
-    symbols: List[str],
-    start: datetime,
-    end: datetime,
-    interval: str = "1d",
-) -> pd.DataFrame:
+def get_prices(symbols, start, end, interval="1d") -> pd.DataFrame:
     """
-    Télécharge les prix de clôture depuis Finnhub.
-    Retourne un DataFrame :
-    - index : datetime UTC
-    - colonnes : symbols
+    Retourne un DataFrame avec colonnes = symbols (les noms UI), index datetime,
+    valeurs = Close.
     """
-    cache_key = f"prices_{'_'.join(symbols)}_{interval}_{start.date()}_{end.date()}"
-    cached = load_cache(cache_key)
-    if cached is not None:
-        return cached
+    start = pd.to_datetime(start)
+    end = pd.to_datetime(end)
 
+    # ⚠️ yfinance veut souvent end "exclusive", on ajoute 1 jour pour être sûr en daily
+    if interval == "1d":
+        end_yf = end + pd.Timedelta(days=1)
+    else:
+        end_yf = end
 
-    api_key = _get_api_key()
-    resolution = _resolution(interval)
+    # Clip pour éviter les data vides en intraday
+    start_clip, end_clip = _clip_dates_for_interval(start, end_yf, interval)
 
-    start_u = _to_unix(start)
-    end_u = _to_unix(end)
+    out = {}
 
-    series = []
+    for sym in symbols:
+        yf_sym = _YF_SYMBOL_MAP.get(sym, sym)
 
-    for symbol in symbols:
-        url = f"{FINNHUB_BASE_URL}/stock/candle"
-        params = {
-            "symbol": symbol,
-            "resolution": resolution,
-            "from": start_u,
-            "to": end_u,
-            "token": api_key,
-        }
+        data = yf.download(
+            yf_sym,
+            start=start_clip,
+            end=end_clip,
+            interval=interval,
+            progress=False,
+            auto_adjust=False,
+            threads=False,
+        )
 
-        for attempt in range(3):
-            r = requests.get(url, params=params, timeout=10)
+        # yfinance renvoie parfois colonnes multiindex
+        if isinstance(data.columns, pd.MultiIndex):
+            data.columns = data.columns.get_level_values(0)
 
-            if r.status_code == 429:
-                time.sleep(1.5 * (attempt + 1))
-                continue
+        if data is None or data.empty:
+            continue
 
-            r.raise_for_status()
-            data = r.json()
-            break
+        # on prend Close
+        if "Close" not in data.columns:
+            continue
 
-        if data.get("s") != "ok":
-            raise RuntimeError(f"Aucune donnée pour {symbol}")
+        s = data["Close"].dropna()
 
-        index = pd.to_datetime(data["t"], unit="s", utc=True)
-        close = pd.Series(data["c"], index=index, name=symbol).astype(float)
-        series.append(close)
+        # index timezone parfois -> on normalise
+        if getattr(s.index, "tz", None) is not None:
+            s.index = s.index.tz_convert(None)
 
-    prices = pd.concat(series, axis=1).sort_index()
+        out[sym] = s
 
-    save_cache(cache_key, prices)
+    df = pd.DataFrame(out)
 
-    return prices
+    # si tout est vide → on renvoie DF vide (la page Streamlit affichera une erreur claire)
+    return df
