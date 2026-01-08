@@ -1,11 +1,23 @@
-## Quant A – Momentum Backtest Module
+## Quant A — Single Asset Backtesting Module
 
-This module implements a univariate momentum strategy on BTC/USD.
+### Objective
+The goal of this module is to evaluate systematic trading strategies
+on a single asset using historical price data.
 
-Features:
-- Buy & Hold strategy
-- Momentum strategy with configurable lookback
-- Backtesting engine with equity curve computation
-- Avoids look-ahead bias using lagged positions
+### Implemented Strategies
+- Buy & Hold
+- Momentum (configurable lookback window)
 
-The module is part of an academic finance dashboard project built in Python.
+### Methodology
+- Historical prices are fetched from external data providers
+- Trading positions are computed using lagged signals
+- Equity curves are computed using a vectorized backtesting engine
+- Performance metrics are evaluated on the resulting equity curve
+
+### Metrics
+- Sharpe Ratio (annualized)
+- Maximum Drawdown
+
+### Results Interpretation
+The momentum strategy allows capturing medium-term trends,
+while Buy & Hold serves as a baseline benchmark.
