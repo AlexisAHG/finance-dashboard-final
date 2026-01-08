@@ -91,7 +91,6 @@ def render_portfolio_page():
     with st.sidebar:
         st.subheader("Quant B — Parameters")
 
-
         tickers_raw = st.text_input(
             "Tickers (comma-separated, min 3)",
             value="AAPL, MSFT, GOOGL",
@@ -99,9 +98,8 @@ def render_portfolio_page():
         tickers = [t.strip().upper() for t in tickers_raw.split(",") if t.strip()]
 
         start = st.date_input("Start date", value=pd.to_datetime("2024-01-01")).isoformat()
-        interval = st.selectbox("Interval", ["1d"], index=0)
         end = st.date_input("End date", value=pd.to_datetime("today")).isoformat()
-
+        interval = st.selectbox("Interval", ["1d"], index=0)
 
         rebalancing = st.selectbox("Rebalancing", ["None", "Weekly", "Monthly"], index=2)
         run = st.button("Run portfolio backtest")
@@ -117,35 +115,67 @@ def render_portfolio_page():
     with st.spinner("Downloading prices and running simulation..."):
         prices = get_prices(tickers, start=start, end=end, interval=interval)
 
-
     if prices is None or prices.empty or prices.shape[1] < 3:
         st.error("Not enough data. Try different tickers or an earlier start date.")
         return
 
     prices = prices.dropna(how="any")
 
-    equity = _simulate_equal_weight_portfolio(prices, rebalancing=rebalancing, initial_value=1.0)
+    # Portfolio with selected rebalancing
+    equity_reb = _simulate_equal_weight_portfolio(
+        prices, rebalancing=rebalancing, initial_value=1.0
+    )
+
+    # Benchmark: no rebalancing
+    equity_no_reb = _simulate_equal_weight_portfolio(
+        prices, rebalancing="None", initial_value=1.0
+    )
+
     returns = _compute_returns(prices)
 
     st.subheader("Assets vs Portfolio (normalized)")
+    st.caption(
+    "The benchmark portfolio (no rebalancing) isolates the effect of rebalancing: "
+    "same assets, same weights at inception, only the rebalancing rule changes."
+    )
+
     norm_prices = prices / prices.iloc[0]
-    norm_equity = equity / equity.iloc[0]
+    norm_reb = equity_reb / equity_reb.iloc[0]
+    norm_no_reb = equity_no_reb / equity_no_reb.iloc[0]
 
     chart_df = norm_prices.copy()
-    chart_df["PORTFOLIO"] = norm_equity
+    chart_df["Portfolio (rebalanced)"] = norm_reb
+    chart_df["Portfolio (no rebalancing)"] = norm_no_reb
+
     st.line_chart(chart_df)
 
-    st.subheader("Portfolio metrics")
-    periods = 252  # stocks default; you can later make this selectable
+    st.subheader("Portfolio metrics comparison")
+    periods = 252
 
-    port_sharpe = sharpe_ratio(equity, periods_per_year=periods, rf=0.0)
-    port_mdd = max_drawdown(equity)
-    total_return = float(norm_equity.iloc[-1] - 1.0)
+    def _metrics(eq: pd.Series):
+        norm = eq / eq.iloc[0]
+        return {
+            "return": float(norm.iloc[-1] - 1.0),
+            "sharpe": sharpe_ratio(eq, periods_per_year=periods, rf=0.0),
+            "mdd": max_drawdown(eq),
+        }
 
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Total return", f"{total_return*100:.2f}%")
-    c2.metric("Sharpe", f"{port_sharpe:.2f}")
-    c3.metric("Max drawdown", f"{port_mdd*100:.2f}%")
+    m_reb = _metrics(equity_reb)
+    m_no = _metrics(equity_no_reb)
+
+    c1, c2 = st.columns(2)
+
+    with c1:
+        st.markdown("**Rebalanced portfolio**")
+        st.metric("Total return", f"{m_reb['return']*100:.2f}%")
+        st.metric("Sharpe", f"{m_reb['sharpe']:.2f}")
+        st.metric("Max drawdown", f"{m_reb['mdd']*100:.2f}%")
+
+    with c2:
+        st.markdown("**No rebalancing (benchmark)**")
+        st.metric("Total return", f"{m_no['return']*100:.2f}%")
+        st.metric("Sharpe", f"{m_no['sharpe']:.2f}")
+        st.metric("Max drawdown", f"{m_no['mdd']*100:.2f}%")
 
     st.subheader("Correlation matrix (assets)")
     st.dataframe(returns.corr())
