@@ -1,3 +1,45 @@
+# Finance Dashboard Project
+
+## DIRECT ACCESS TO LIVE SITE
+The application is fully functional and accessible via the following link:
+http://34.140.210.188:8501/
+
+(The project runs 24/7 on a Google Cloud Virtual Machine).
+
+---
+
+## Team & Roles
+This project was completed by a team of two students:
+* **Quant A (Single Asset Module):** Vivien Winnoc
+* **Quant B (Portfolio Module):** Alexis Hanna (@AlexisAHG)
+
+## Project Description
+This platform supports fundamental portfolio managers with quantitative tools. It aims to simulate a professional workflow where users can:
+1. Retrieve real-time financial data for multiple assets.
+2. Backtest trading strategies on single assets (Quant A).
+3. Simulate portfolio allocation and analyze diversification effects (Quant B).
+
+## Local Installation
+To run the project locally on your machine, follow these steps:
+
+1.  **Clone the repository:**
+    ```bash
+    git clone [https://github.com/AlexisAHG/finance-dashboard-final.git](https://github.com/AlexisAHG/finance-dashboard-final.git)
+    cd finance-dashboard-final
+    ```
+
+2.  **Install dependencies:**
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+3.  **Launch the application:**
+    ```bash
+    streamlit run app.py
+    ```
+
+---
+
 ## Quant A — Single Asset Backtesting Module
 
 ### Objective
@@ -44,31 +86,4 @@ The goal of this module is to extend the analysis to a multivariate setting, sim
 * **Correlation Matrix:** Heatmap visualization to assess diversification potential.
 * **Diversification Effect:** Visual comparison showing how the portfolio mitigates risk compared to holding single volatile assets.
 
----
 
-# Deployment & Usage
-
-### Live Application
-The project is deployed on a Google Cloud VM and is accessible via the following link:
-👉 **http://34.140.210.188:8501/**
-
-*(Note: The application runs continuously via systemd service on an Ubuntu VM).*
-
-### Local Installation
-To run the dashboard locally:
-
-1.  **Clone the repository:**
-    ```bash
-    git clone [https://github.com/AlexisAHG/finance-dashboard-final.git](https://github.com/AlexisAHG/finance-dashboard-final.git)
-    cd finance-dashboard-final
-    ```
-
-2.  **Install dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-3.  **Launch the application:**
-    ```bash
-    streamlit run app.py
-    ```
