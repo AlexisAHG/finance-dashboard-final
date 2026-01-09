@@ -1,12 +1,10 @@
-# Environnement virtuel
-.venv/
-
-# Variables sensibles
-.env
-
-# Python
-__pycache__/
+﻿__pycache__/
 *.pyc
-
-# Cache du projet
-reports/cache/
+env/
+venv/
+.env
+*.log
+.DS_Store
+*.bak
+*.old
+app_old.py
